@@ -244,14 +244,19 @@ int CpuRam::process(vluint64_t main_time) {
         ram_read_mark = true;
     }
     if (top->ram_wen) {
-#ifdef MEM_TRACE
-        fprintf(mem_out, "[%010dns] mem wr: pc = %08x, addr = %08x, data = %08x\n", main_time, top->debug0_wb_pc, top->ram_waddr&0x7ffffff, top->ram_wdata);
-#endif
+        if ((top->ram_waddr & 0xff000000) == 0x1c000000) {
+            write_addr = (top->ram_waddr);
+        } else
 #ifdef RUN_FUNC
-        return process_write(main_time,(top->ram_waddr),top->ram_wen,top->ram_wdata);
+            write_addr  = (top->ram_waddr);
 #else
-        return process_write(main_time, (top->ram_waddr & 0x7ffffff), top->ram_wen, top->ram_wdata);
+            write_addr = (top->ram_waddr & 0x07ffffff);
 #endif
+#ifdef MEM_TRACE
+        fprintf(mem_out, "[%010dns] mem wr: pc = %08x, addr = %08x, data = %08x\n", main_time, top->debug0_wb_pc, write_addr, top->ram_wdata);
+#endif
+        return process_write(main_time,write_addr,top->ram_wen,top->ram_wdata);
+
         //return process_write(main_time,(top->ram_waddr),top->ram_wen,top->ram_wdata);
         //return process_write128(main_time,top->ram_waddr&~0xf,top->ram_wen,top->ram_wdata);
     }

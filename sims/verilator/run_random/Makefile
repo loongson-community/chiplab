@@ -191,7 +191,7 @@ simulation_run_random:
 	@echo "RUN simulation..."
 	@echo "============================================================================================================="
 	@echo "============================================================================================================="
-	make all -C ../../../software/random_boot/ ./Makefile || exit "$$?"
+	make all -C ../../../software/examples/random_boot/ ./Makefile || exit "$$?"
 	make prepare -C ./run_random -f ./Makefile || exit "$$?"
 	make all -C ./run_random -f ./Makefile || exit "$$?"
 check_result:
@@ -203,7 +203,7 @@ check_result:
 clean:
 	rm -f output & rm -rf obj_dir &	\
 	make clean -C ./run_random -f ./Makefile
-	make clean -C ../../../software/random_boot/ ./Makefile
+	make clean -C ../../../software/examples/random_boot/ ./Makefile
 	rm -rf ./tmp 
 	rm -rf log/*
 
@@ -215,5 +215,5 @@ clean_all:
 	rm -f config-generator.mak 
 	rm -f config.log
 	make clean -C ./run_random -f ./Makefile
-	make clean -C ../../../software/random_boot/ ./Makefile
+	make clean -C ../../../software/examples/random_boot/ ./Makefile
 

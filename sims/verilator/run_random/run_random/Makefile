@@ -1,4 +1,4 @@
-BASE :=../../../../software/random_res
+BASE :=../../../../software/examples/random_res
 DIRS :=$(filter-out Makefile,$(wildcard $(BASE)/*))
 .PHONY: all $(DIRS)
 # To run specific test <TESTCASE> (e.g. RES0)

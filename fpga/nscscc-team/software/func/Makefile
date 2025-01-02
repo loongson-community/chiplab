@@ -1,4 +1,4 @@
-func_src_path = ../../../../software/func/func_src
+func_src_path = ../../../../software/examples/func/func_src
 inst_path = ${func_src_path}/inst
 include_path = ${func_src_path}/include
 obj_path = ./obj

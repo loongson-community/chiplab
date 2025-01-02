@@ -76,10 +76,10 @@ set_property PACKAGE_PIN Y5 [get_ports {btn_step[0]}]
 set_property PACKAGE_PIN V6 [get_ports {btn_step[1]}]
 
 #uart
-set_property PACKAGE_PIN F23 [get_ports rx_pin]
-set_property IOSTANDARD LVCMOS33 [get_ports rx_pin]
-set_property PACKAGE_PIN H19 [get_ports tx_pin]
-set_property IOSTANDARD LVCMOS33 [get_ports tx_pin]
+set_property PACKAGE_PIN F23 [get_ports UART_RX]
+set_property IOSTANDARD LVCMOS33 [get_ports UART_RX]
+set_property PACKAGE_PIN H19 [get_ports UART_TX]
+set_property IOSTANDARD LVCMOS33 [get_ports UART_TX]
 
 set_property IOSTANDARD LVCMOS33 [get_ports clk]
 set_property IOSTANDARD LVCMOS33 [get_ports resetn]

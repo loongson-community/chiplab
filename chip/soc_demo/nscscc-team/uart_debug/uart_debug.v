@@ -13,19 +13,21 @@
  See the License for the specific language governing permissions and     
  limitations under the License.                                          
  */
-
-// clk = 100MHz时对应的波特率115200分频系数
-`define UART_BAUD_115200        32'h364
+`include "../soc_config.vh"
 
 // 串口寄存器物理地址
-`define UART_CTRL_REG           32'h1eaf0000
-`define UART_STATUS_REG         32'h1eaf0004
-`define UART_BAUD_REG           32'h1eaf0008
-`define UART_TX_REG             32'h1eaf000c
-`define UART_RX_REG             32'h1eaf0010
+`define OFS_FIFO                32'h1fe00002
+`define OFS_LINE_CONTROL        32'h1fe00003
+`define OFS_DIVISOR_MSB         32'h1fe00001
+`define OFS_DIVISOR_LSB         32'h1fe00000
+`define OFS_DATA_FORMAT         32'h1fe00003
+`define OFS_MODEM_CONTROL       32'h1fe00004
+`define OFS_LINE_STATUS         32'h1fe00005
+`define UART_TX_REG             32'h1fe00000
+`define UART_RX_REG             32'h1fe00000
 
-`define UART_TX_BUSY_FLAG       32'h1
-`define UART_RX_OVER_FLAG       32'h2
+`define UART_DATA_READY          32'h1
+`define UART_TRANSMIT_FIFO_EMPTY 32'h20
 
 // 第一个包的大小
 `define UART_FIRST_PACKET_LEN   8'd131
@@ -96,28 +98,34 @@ module uart_debug(
     );
 
     // 状态
-    localparam  S_IDLE                    = 4'h0;
-    localparam  S_INIT_UART_CTRL          = 4'h1;
-    localparam  S_INIT_UART_BAUD          = 4'h2;
-    localparam  S_CLEAR_UART_RX_OVER_FLAG = 4'h3;
-    localparam  S_WAIT_BYTE               = 4'h4;
-    localparam  S_WAIT_BYTE2              = 4'h5;
-    localparam  S_GET_BYTE                = 4'h6;
-    localparam  S_REC_FIRST_PACKET        = 4'h7;
-    localparam  S_REC_REMAIN_PACKET       = 4'h8;
-    localparam  S_SEND_ACK                = 4'h9;
-    localparam  S_SEND_NAK                = 4'ha;
-    localparam  S_CRC_START               = 4'hb;
-    localparam  S_CRC_CALC                = 4'hc;
-    localparam  S_CRC_END                 = 4'hd;
-    localparam  S_WRITE_MEM               = 4'he;
-    localparam  S_CORE_RESET              = 4'hf;
+    localparam  S_IDLE                      = 5'd0;
+    localparam  S_INIT_FIFO                 = 5'd1;
+    localparam  S_INIT_LINE_CONTROL         = 5'd2;
+    localparam  S_INIT_DIVISOR_MSB          = 5'd3;
+    localparam  S_INIT_DIVISOR_LSB          = 5'd4;
+    localparam  S_INIT_DATA_FORMAT          = 5'd5;
+    localparam  S_INIT_MODEM_CONTROL        = 5'd6;
+    localparam  S_WAIT_BYTE                 = 5'd7;
+    localparam  S_WAIT_BYTE2                = 5'd8;
+    localparam  S_GET_BYTE                  = 5'd9;
+    localparam  S_REC_FIRST_PACKET          = 5'd10;
+    localparam  S_REC_REMAIN_PACKET         = 5'd11;
+    localparam  S_SEND_ACK                  = 5'd12;
+    localparam  S_SEND_ACK2                 = 5'd13;
+    localparam  S_SEND_NAK                  = 5'd14;
+    localparam  S_SEND_NAK2                 = 5'd15;
+    localparam  S_CRC_START                 = 5'd16;
+    localparam  S_CRC_CALC                  = 5'd17;
+    localparam  S_CRC_END                   = 5'd18;
+    localparam  S_WRITE_MEM                 = 5'd19;
+    localparam  S_CORE_RESET                = 5'd20;
+    localparam  S_CLOSE                     = 5'd21;
 
-    reg[3:0]    state;
-    reg[3:0]    next_state;
+    reg[4:0]    state;
+    reg[4:0]    next_state;
 
     // 存放串口接收到的数据
-    reg[7:0]    rx_data[0:131];
+    reg[7:0]    rx_data[0:132];
     reg[7:0]    rec_bytes_index;
     reg[7:0]    need_to_rec_bytes;
     reg[15:0]   remain_packet_count;
@@ -135,10 +143,13 @@ module uart_debug(
     reg         uart_debug_we;
     reg[31:0]   uart_debug_addr;
     reg[31:0]   uart_debug_wdata;
+    reg         uart_debug_stb;
 
     //uart debug response 信号
     wire        store_finish;
     wire        load_finish;
+
+    reg [15:0]  wait_byte_count;
 
     reg [7:0]   command_rst_count;
 
@@ -155,35 +166,56 @@ module uart_debug(
     always @(*) begin
         case(state)
             S_IDLE : begin
-                next_state = S_INIT_UART_CTRL;
+                next_state = S_INIT_FIFO;
             end
-            S_INIT_UART_CTRL : begin
+            S_INIT_FIFO : begin
                 if(store_finish)
-                    next_state = S_INIT_UART_BAUD;
+                    next_state = S_INIT_LINE_CONTROL;
                 else
-                    next_state = S_INIT_UART_CTRL;
+                    next_state = S_INIT_FIFO;
             end
-            S_INIT_UART_BAUD : begin
+            S_INIT_LINE_CONTROL : begin
+                if(store_finish)
+                    next_state = S_INIT_DIVISOR_MSB;
+                else
+                    next_state = S_INIT_LINE_CONTROL;
+            end
+            S_INIT_DIVISOR_MSB : begin
+                if(store_finish)
+                    next_state = S_INIT_DIVISOR_LSB;
+                else
+                    next_state = S_INIT_DIVISOR_MSB;
+            end
+            S_INIT_DIVISOR_LSB : begin
+                if(store_finish)
+                    next_state = S_INIT_DATA_FORMAT;
+                else
+                    next_state = S_INIT_DIVISOR_LSB;
+            end
+            S_INIT_DATA_FORMAT : begin
+                if(store_finish)
+                    next_state = S_INIT_MODEM_CONTROL;
+                else
+                    next_state = S_INIT_DATA_FORMAT;
+            end
+            S_INIT_MODEM_CONTROL : begin
                 if(store_finish)
                     next_state = S_REC_FIRST_PACKET;
                 else
-                    next_state = S_INIT_UART_BAUD;
+                    next_state = S_INIT_MODEM_CONTROL;
             end
             S_REC_FIRST_PACKET : begin
-                next_state = S_CLEAR_UART_RX_OVER_FLAG;
+                next_state = S_WAIT_BYTE;
             end
             S_REC_REMAIN_PACKET : begin
-                next_state = S_CLEAR_UART_RX_OVER_FLAG;
-            end
-            S_CLEAR_UART_RX_OVER_FLAG : begin
-                if(store_finish)
-                    next_state = S_WAIT_BYTE;
-                else
-                    next_state = S_CLEAR_UART_RX_OVER_FLAG;
+                next_state = S_WAIT_BYTE;
             end
             S_WAIT_BYTE : begin
-                if(irq_rx)
+                //if(irq_rx)
+                if(load_finish & (((rdata>>8) & `UART_DATA_READY) == `UART_DATA_READY))
                     next_state = S_WAIT_BYTE2;
+                else if(wait_byte_count == 16'hffff)
+                    next_state = S_SEND_NAK;
                 else
                     next_state = S_WAIT_BYTE;
             end
@@ -197,7 +229,7 @@ module uart_debug(
                 if (rec_bytes_index == need_to_rec_bytes)
                     next_state = S_CRC_START;
                 else
-                    next_state = S_CLEAR_UART_RX_OVER_FLAG;
+                    next_state = S_WAIT_BYTE;
             end
              S_CRC_START: begin
                 next_state = S_CRC_CALC;
@@ -228,6 +260,13 @@ module uart_debug(
                     next_state = S_WRITE_MEM;
             end
             S_SEND_ACK: begin
+                if(load_finish & (((rdata>>8) & `UART_TRANSMIT_FIFO_EMPTY) == `UART_TRANSMIT_FIFO_EMPTY))
+                    next_state = S_SEND_ACK2;
+                else begin
+                    next_state = S_SEND_ACK;
+                end
+            end
+            S_SEND_ACK2: begin
                 if(store_finish) begin
                     if (remain_packet_count > 0) begin
                         next_state = S_REC_REMAIN_PACKET;
@@ -236,15 +275,25 @@ module uart_debug(
                         if(rx_data[0] == 8'hff && rx_data[128] == 8'hff)begin
                             next_state = S_CORE_RESET;
                         end
+                        else if(rx_data[0] == 8'h11 && rx_data[128] == 8'h11)begin
+                            next_state = S_CLOSE;
+                        end
                         else begin
                             next_state = S_REC_FIRST_PACKET;
                         end
                     end
                 end
                 else
-                    next_state = S_SEND_ACK;
+                    next_state = S_SEND_ACK2;
             end
             S_SEND_NAK: begin
+                if(load_finish & (((rdata>>8) & `UART_TRANSMIT_FIFO_EMPTY) == `UART_TRANSMIT_FIFO_EMPTY))
+                    next_state = S_SEND_NAK2;
+                else begin
+                    next_state = S_SEND_NAK;
+                end
+            end
+            S_SEND_NAK2: begin
                 if(store_finish) begin
                     if (remain_packet_count > 0) begin
                         next_state = S_REC_REMAIN_PACKET;
@@ -254,13 +303,16 @@ module uart_debug(
                     end
                 end
                 else
-                    next_state = S_SEND_NAK;
+                    next_state = S_SEND_NAK2;
             end
             S_CORE_RESET: begin
                 if(command_rst_count == 8'hff)
                     next_state = S_REC_FIRST_PACKET;
                 else
                     next_state = S_CORE_RESET;
+            end
+            S_CLOSE: begin
+                next_state = S_CLOSE;
             end
             default     :begin
                 next_state = S_IDLE;
@@ -275,102 +327,161 @@ module uart_debug(
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
-            S_INIT_UART_CTRL : begin
+            S_INIT_FIFO : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h1;
-                uart_debug_addr = `UART_CTRL_REG;
+                uart_debug_addr = `OFS_FIFO;
+                uart_debug_wdata = 32'h07;
+                uart_debug_stb = 1'h1;
+            end
+            S_INIT_LINE_CONTROL : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h1;
+                uart_debug_addr = `OFS_LINE_CONTROL;
+                uart_debug_wdata = 32'h80;
+                uart_debug_stb = 1'h1;
+            end
+            S_INIT_DIVISOR_MSB : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h1;
+                uart_debug_addr = `OFS_DIVISOR_MSB;
+                uart_debug_wdata = 32'h00;
+                uart_debug_stb = 1'h1;
+            end
+            S_INIT_DIVISOR_LSB : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h1;
+                uart_debug_addr = `OFS_DIVISOR_LSB;
+                uart_debug_wdata = 32'h36;
+                uart_debug_stb = 1'h1;
+            end
+            S_INIT_DATA_FORMAT : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h1;
+                uart_debug_addr = `OFS_DATA_FORMAT;
                 uart_debug_wdata = 32'h3;
+                uart_debug_stb = 1'h1;
             end
-            S_INIT_UART_BAUD : begin
+            S_INIT_MODEM_CONTROL : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h1;
-                uart_debug_addr = `UART_BAUD_REG;
-                uart_debug_wdata = `UART_BAUD_115200;
+                uart_debug_addr = `OFS_MODEM_CONTROL;
+                uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h1;
             end
             S_REC_FIRST_PACKET : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_REC_REMAIN_PACKET : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
-            end
-            S_CLEAR_UART_RX_OVER_FLAG : begin
-                uart_debug_req = 1'h1;
-                uart_debug_we = 1'h1;
-                uart_debug_addr = `UART_STATUS_REG;
-                uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_WAIT_BYTE : begin
-                uart_debug_req = 1'h0;
+                uart_debug_req = 1'h1;
                 uart_debug_we = 1'h0;
-                uart_debug_addr = 32'h0;
+                uart_debug_addr = `OFS_LINE_STATUS;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_WAIT_BYTE2 : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = `UART_RX_REG;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_GET_BYTE : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_CRC_START : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_CRC_CALC : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_CRC_END : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             S_WRITE_MEM : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h1;
                 uart_debug_addr = write_mem_addr;
                 uart_debug_wdata = write_mem_data;
+                uart_debug_stb = 1'h0;
             end
             S_SEND_ACK : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h0;
+                uart_debug_addr = `OFS_LINE_STATUS;
+                uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
+            end
+            S_SEND_ACK2 : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h1;
                 uart_debug_addr = `UART_TX_REG;
                 uart_debug_wdata = `UART_RESP_ACK;
+                uart_debug_stb = 1'h1;
             end
             S_SEND_NAK : begin
+                uart_debug_req = 1'h1;
+                uart_debug_we = 1'h0;
+                uart_debug_addr = `OFS_LINE_STATUS;
+                uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
+            end
+            S_SEND_NAK2 : begin
                 uart_debug_req = 1'h1;
                 uart_debug_we = 1'h1;
                 uart_debug_addr = `UART_TX_REG;
                 uart_debug_wdata = `UART_RESP_NAK;
+                uart_debug_stb = 1'h1;
             end
             S_CORE_RESET : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
+            end
+            S_CLOSE : begin
+                uart_debug_req = 1'h0;
+                uart_debug_we = 1'h0;
+                uart_debug_addr = 32'h0;
+                uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
             default : begin
                 uart_debug_req = 1'h0;
                 uart_debug_we = 1'h0;
                 uart_debug_addr = 32'h0;
                 uart_debug_wdata = 32'h0;
+                uart_debug_stb = 1'h0;
             end
         endcase
     end
@@ -412,9 +523,9 @@ module uart_debug(
         else begin
             if(state == S_REC_REMAIN_PACKET)
                 download_rst <= 1'b0;
-            else if(state == S_SEND_ACK && next_state == S_REC_FIRST_PACKET )
+            else if(state == S_SEND_ACK2 && next_state == S_REC_FIRST_PACKET )
                 download_rst <= 1'b1;
-            else if(state == S_INIT_UART_CTRL)
+            else if(state == S_INIT_FIFO)
                 download_rst <= 1'b1;
         end
     end
@@ -476,6 +587,21 @@ module uart_debug(
                     rec_bytes_index <= 8'h0;
                 end
             endcase
+        end
+    end
+
+    // 超时检测
+    always @ (posedge clk or negedge rst_n) begin
+        if (~rst_n) begin
+            wait_byte_count <= 16'h0;
+        end
+        else begin
+            if((state == S_WAIT_BYTE) && (rec_bytes_index > 8'h0) && load_finish)
+                wait_byte_count <= wait_byte_count + 1'h1;
+            else if(state == S_WAIT_BYTE2 && load_finish)
+                wait_byte_count <= 16'h0;
+            else
+                wait_byte_count <= wait_byte_count;
         end
     end
 
@@ -616,6 +742,7 @@ uart_debug_axi  u_uart_debug_axi (
     .uart_debug_we           ( uart_debug_we      ),
     .uart_debug_addr         ( uart_debug_addr    ),
     .uart_debug_wdata        ( uart_debug_wdata   ),
+    .uart_debug_stb          ( uart_debug_stb     ),
     .arready                 ( arready            ),
     .rid                     ( rid                ),
     .rdata                   ( rdata              ),

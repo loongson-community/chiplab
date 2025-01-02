@@ -77,9 +77,10 @@ module soc_axi_lite_top #(parameter SIMULATION=1'b0)
     output [3 :0] btn_key_col,
     input  [3 :0] btn_key_row,
     input  [1 :0] btn_step,
+
     //------uart-------
-    input  rx_pin,
-    output tx_pin
+    inout         UART_RX,
+    inout         UART_TX
 );
 //debug signals
 wire [31:0] debug_wb_pc;
@@ -391,7 +392,7 @@ wire  uart_debug_wlast;
 wire  uart_debug_wvalid;
 wire  uart_debug_bready;
 
-//uart
+//uart axi
 wire  uart_arready;
 wire  [ 3:0]  uart_rid;
 wire  [31:0]  uart_rdata;
@@ -429,6 +430,38 @@ wire  uart_wlast;
 wire  uart_wvalid;
 wire  uart_bready;
 wire  irq_rx;
+
+//uart
+wire UART_CTS,   UART_RTS;
+wire UART_DTR,   UART_DSR;
+wire UART_RI,    UART_DCD;
+assign UART_CTS = 1'b0;
+assign UART_DSR = 1'b0;
+assign UART_DCD = 1'b0;
+assign UART_RI  = 1'b0;
+wire uart0_int   ;
+wire uart0_txd_o ;
+wire uart0_txd_i ;
+wire uart0_txd_oe;
+wire uart0_rxd_o ;
+wire uart0_rxd_i ;
+wire uart0_rxd_oe;
+wire uart0_rts_o ;
+wire uart0_cts_i ;
+wire uart0_dsr_i ;
+wire uart0_dcd_i ;
+wire uart0_dtr_o ;
+wire uart0_ri_i  ;
+assign     UART_RX     = uart0_rxd_oe ? 1'bz : uart0_rxd_o ;
+assign     UART_TX     = uart0_txd_oe ? 1'bz : uart0_txd_o ;
+assign     UART_RTS    = uart0_rts_o ;
+assign     UART_DTR    = uart0_dtr_o ;
+assign     uart0_txd_i = UART_TX;
+assign     uart0_rxd_i = UART_RX;
+assign     uart0_cts_i = UART_CTS;
+assign     uart0_dcd_i = UART_DCD;
+assign     uart0_dsr_i = UART_DSR;
+assign     uart0_ri_i  = UART_RI ;
 
 //for lab6
 wire [4 :0] ram_random_mask;
@@ -852,7 +885,8 @@ confreg #(.SIMULATION(SIMULATION)) u_confreg
 (
     .timer_clk   ( sys_clk          ),  // i, 1   
     .aclk        ( sys_clk          ),  // i, 1   
-    .aresetn     ( confreg_resetn   ),  // i, 1    
+    .aresetn     ( confreg_resetn   ),  // i, 1   
+    .sys_resetn  ( sys_resetn       ),    
 
     .arid        (conf_arid    ),
     .araddr      (conf_araddr  ),
@@ -902,7 +936,7 @@ confreg #(.SIMULATION(SIMULATION)) u_confreg
     .btn_key_row ( btn_key_row),  // i, 4           
     .btn_step    ( btn_step   )   // i, 2   
 );
-
+/*
 uart_wrap  u_uart_wrap (
     .aclk                    ( sys_clk        ),
     .aresetn                 ( sys_resetn     ),
@@ -946,6 +980,78 @@ uart_wrap  u_uart_wrap (
     .bvalid                  ( uart_bvalid    ),
     .irq_rx                  ( irq_rx         ),
     .tx_pin                  ( tx_pin         )
+);
+*/
+//AXI2APB
+axi2apb_misc APB_DEV 
+(
+    .clk                (sys_clk                ),
+    .rst_n              (sys_resetn             ),
+
+    .axi_s_awid         (uart_awid              ),
+    .axi_s_awaddr       (uart_awaddr            ),
+    .axi_s_awlen        (uart_awlen             ),
+    .axi_s_awsize       (uart_awsize            ),
+    .axi_s_awburst      (uart_awburst           ),
+    .axi_s_awlock       (uart_awlock            ),
+    .axi_s_awcache      (uart_awcache           ),
+    .axi_s_awprot       (uart_awprot            ),
+    .axi_s_awvalid      (uart_awvalid           ),
+    .axi_s_awready      (uart_awready           ),
+    .axi_s_wid          (uart_wid               ),
+    .axi_s_wdata        (uart_wdata             ),
+    .axi_s_wstrb        (uart_wstrb             ),
+    .axi_s_wlast        (uart_wlast             ),
+    .axi_s_wvalid       (uart_wvalid            ),
+    .axi_s_wready       (uart_wready            ),
+    .axi_s_bid          (uart_bid               ),
+    .axi_s_bresp        (uart_bresp             ),
+    .axi_s_bvalid       (uart_bvalid            ),
+    .axi_s_bready       (uart_bready            ),
+    .axi_s_arid         (uart_arid              ),
+    .axi_s_araddr       (uart_araddr            ),
+    .axi_s_arlen        (uart_arlen             ),
+    .axi_s_arsize       (uart_arsize            ),
+    .axi_s_arburst      (uart_arburst           ),
+    .axi_s_arlock       (uart_arlock            ),
+    .axi_s_arcache      (uart_arcache           ),
+    .axi_s_arprot       (uart_arprot            ),
+    .axi_s_arvalid      (uart_arvalid           ),
+    .axi_s_arready      (uart_arready           ),
+    .axi_s_rid          (uart_rid               ),
+    .axi_s_rdata        (uart_rdata             ),
+    .axi_s_rresp        (uart_rresp             ),
+    .axi_s_rlast        (uart_rlast             ),
+    .axi_s_rvalid       (uart_rvalid            ),
+    .axi_s_rready       (uart_rready            ),
+
+    .apb_rw_dma         (1'b0                   ),
+    .apb_psel_dma       (1'b0                   ),
+    .apb_enab_dma       (1'b0                   ),
+    .apb_addr_dma       (20'b0                  ),
+    .apb_valid_dma      (1'b0                   ),
+    .apb_wdata_dma      (32'b0                  ),
+    .apb_rdata_dma      (                       ),
+    .apb_ready_dma      (                       ), 
+    .dma_grant          (                       ),
+
+    .dma_req_o          (                       ),
+    .dma_ack_i          (1'b0                   ),
+
+    //UART0
+    .uart0_txd_i        (uart0_txd_i            ),
+    .uart0_txd_o        (uart0_txd_o            ),
+    .uart0_txd_oe       (uart0_txd_oe           ),
+    .uart0_rxd_i        (uart0_rxd_i            ),
+    .uart0_rxd_o        (uart0_rxd_o            ),
+    .uart0_rxd_oe       (uart0_rxd_oe           ),
+    .uart0_rts_o        (uart0_rts_o            ),
+    .uart0_dtr_o        (uart0_dtr_o            ),
+    .uart0_cts_i        (uart0_cts_i            ),
+    .uart0_dsr_i        (uart0_dsr_i            ),
+    .uart0_dcd_i        (uart0_dcd_i            ),
+    .uart0_ri_i         (uart0_ri_i             ),
+    .uart0_int          (uart0_int              )
 );
 
 endmodule

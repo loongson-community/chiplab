@@ -23,10 +23,12 @@ module uart(
 
     input wire we_i,
     input wire[31:0] waddr_i,
-    input wire[31:0] raddr_i,
     input wire[31:0] data_i,
 
+    input wire       re_i,
+    input wire[31:0] raddr_i,
     output reg[31:0] data_o,
+
     output wire irq_rx,
 	output wire tx_pin,
     input wire rx_pin
@@ -139,25 +141,30 @@ module uart(
     // 读寄存器
     always @ (posedge clk) begin
         if (rst == 1'b0) begin
-            data_o = 32'h0;
+            data_o <= 32'h0;
         end else begin
-            case (raddr_i[7:0])
-                UART_CTRL: begin
-                    data_o = uart_ctrl;
-                end
-                UART_STATUS: begin
-                    data_o = uart_status;
-                end
-                UART_BAUD: begin
-                    data_o = uart_baud;
-                end
-                UART_RXDATA: begin
-                    data_o = uart_rx;
-                end
-                default: begin
-                    data_o = 32'h0;
-                end
-            endcase
+            if(re_i) begin
+                case (raddr_i[7:0])
+                    UART_CTRL: begin
+                        data_o <= uart_ctrl;
+                    end
+                    UART_STATUS: begin
+                        data_o <= uart_status;
+                    end
+                    UART_BAUD: begin
+                        data_o <= uart_baud;
+                    end
+                    UART_RXDATA: begin
+                        data_o <= uart_rx;
+                    end
+                    default: begin
+                        data_o <= 32'h0;
+                    end
+                endcase
+            end
+            else begin
+                data_o <= data_o;
+            end
         end
     end
 

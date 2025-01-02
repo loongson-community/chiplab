@@ -14,3 +14,16 @@ fpga/nscscc-team/run_vivado/*.dmp
 fpga/nscscc-team/run_vivado/*.log
 fpga/nscscc-team/run_vivado/project
 fpga/nscscc-team/software/perf/bench/*/*.a
+chip/soc_demo/nscscc-team/uart_debug/testbench
+sims/verilator/run_prog/log
+sims/verilator/run_prog/obj
+sims/verilator/run_prog/obj_dir
+sims/verilator/run_prog/tmp
+sims/verilator/run_prog/config-software.mak
+sims/verilator/run_prog/config-generator.mak
+sims/verilator/run_prog/config.log
+sims/verilator/run_prog/output
+sims/verilator/run_random/log
+sims/verilator/run_random/config-generator.mak
+obj/
+software/examples/random_res

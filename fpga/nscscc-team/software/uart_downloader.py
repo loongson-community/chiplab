@@ -49,15 +49,18 @@ import serial
 |-------------------------------------------------------------------|
 '''
 
+#RS232常用波特率：300 1200 2400 9600 19200 115200
+UART_BAUDRATE = 115200
 
 ACK = bytes([0x6])
+NAK = bytes([0x15])
 FIRST_PACKET_LEN = 131
 FILE_NAME_INDEX = 1
 FILE_SIZE_INDEX = 61
 FIRST_PACKET_CRC0_INDEX = 129
 FIRST_PACKET_CRC1_INDEX = 130
 OTHER_PACKET_LEN = 131
-
+RETRANSMISSION = 4
 
 serial_com = serial.Serial()
 
@@ -66,7 +69,7 @@ serial_com = serial.Serial()
 # 串口参数：115200, 8 N 1
 def serial_init():
     serial_com.port = sys.argv[1]
-    serial_com.baudrate = 115200
+    serial_com.baudrate = UART_BAUDRATE
     serial_com.bytesize = serial.EIGHTBITS
     serial_com.parity = serial.PARITY_NONE
     serial_com.stopbits = serial.STOPBITS_ONE
@@ -131,15 +134,52 @@ def main():
             # CRC
             packet[FIRST_PACKET_CRC0_INDEX] = (crc >> 0) & 0xff
             packet[FIRST_PACKET_CRC1_INDEX] = (crc >> 8) & 0xff
-            # 发送
-            serial_write(bytes(packet))
-            # 读应答
-            ack = serial_read(1, 3)
-            if (ack != ACK):
-                print('reset packet NACK from slave')
-                serial_deinit()
-                return
-            print('reset ok')
+            transcount = 0
+            for transcount in range(RETRANSMISSION):
+                serial_write(bytes(packet))
+                ack = serial_read(1, 3)
+                if (ack == ACK):
+                    print('reset ok')
+                    break
+                elif (ack == NAK) and (transcount < RETRANSMISSION -1):
+                    print('reset packet crc error, retransmit')
+                elif (ack == NAK) and (transcount == RETRANSMISSION -1):
+                    print('reset packet retransmit fail')
+                    serial_deinit()
+                    return
+                elif (ack == -1) and (transcount < RETRANSMISSION -1):
+                    print('reset packet timeout, retransmit')
+                elif (ack == -1) and (transcount == RETRANSMISSION -1):
+                    print('reset packet retransmit fail')
+                    serial_deinit()
+                    return
+        elif(sys.argv[2] == 'close') :
+            packet = [0] * FIRST_PACKET_LEN
+            packet[0] = 0x11
+            packet[128] = 0x11
+            crc = calc_crc16(packet[1:129])
+            # CRC
+            packet[FIRST_PACKET_CRC0_INDEX] = (crc >> 0) & 0xff
+            packet[FIRST_PACKET_CRC1_INDEX] = (crc >> 8) & 0xff
+            transcount = 0
+            for transcount in range(RETRANSMISSION):
+                serial_write(bytes(packet))
+                ack = serial_read(1, 3)
+                if (ack == ACK):
+                    print('has closed uart_debug module')
+                    break
+                elif (ack == NAK) and (transcount < RETRANSMISSION -1):
+                    print('close packet crc error, retransmit')
+                elif (ack == NAK) and (transcount == RETRANSMISSION -1):
+                    print('close packet retransmit fail')
+                    serial_deinit()
+                    return
+                elif (ack == -1) and (transcount < RETRANSMISSION -1):
+                    print('close packet timeout, retransmit')
+                elif (ack == -1) and (transcount == RETRANSMISSION -1):
+                    print('close packet retransmit fail')
+                    serial_deinit()
+                    return
         else :
             bin_file_size = os.path.getsize(sys.argv[2])
             print('bin file size: %d bytes' % bin_file_size)
@@ -167,14 +207,24 @@ def main():
             packet[FIRST_PACKET_CRC0_INDEX] = (crc >> 0) & 0xff
             packet[FIRST_PACKET_CRC1_INDEX] = (crc >> 8) & 0xff
             # 5.发送
-            serial_write(bytes(packet))
-            # 6.读应答
-            ack = serial_read(1, 3)
-            if (ack != ACK):
-                print('packet0 NACK from slave')
-                bin_file.close()
-                serial_deinit()
-                return
+            transcount = 0
+            for transcount in range(RETRANSMISSION):
+                serial_write(bytes(packet))
+                ack = serial_read(1, 3)
+                if (ack == ACK):
+                    break
+                elif (ack == NAK) and (transcount < RETRANSMISSION -1):
+                    print('packet#0 crc error, retransmit')
+                elif (ack == NAK) and (transcount == RETRANSMISSION -1):
+                    print('packet#0 retransmit fail')
+                    serial_deinit()
+                    return
+                elif (ack == -1) and (transcount < RETRANSMISSION -1):
+                    print('packet#0 timeout, retransmit')
+                elif (ack == -1) and (transcount == RETRANSMISSION -1):
+                    print('packet#0 retransmit fail')
+                    serial_deinit()
+                    return
 
             ############### 剩余包 ###############
             bin_file = open(sys.argv[2], 'rb')
@@ -197,13 +247,26 @@ def main():
                     crc = calc_crc16(packet[1:129])
                     packet[FIRST_PACKET_CRC0_INDEX] = (crc >> 0) & 0xff
                     packet[FIRST_PACKET_CRC1_INDEX] = (crc >> 8) & 0xff
-                    serial_write(bytes(packet))
-                    ack = serial_read(1, 3)
-                    if (ack != ACK):
-                        print('NACK1 from slave')
-                        bin_file.close()
-                        serial_deinit()
-                        return
+                    transcount = 0
+                    for transcount in range(RETRANSMISSION):
+                        serial_write(bytes(packet))
+                        ack = serial_read(1, 3)
+                        if (ack == ACK):
+                            break
+                        elif (ack == NAK) and (transcount < RETRANSMISSION -1):
+                            print('packet#%d crc error, retransmit' % (i + 1))
+                        elif (ack == NAK) and (transcount == RETRANSMISSION -1):
+                            print('packet#%d retransmit fail' % (i + 1))
+                            bin_file.close()
+                            serial_deinit()
+                            return
+                        elif (ack == -1) and (transcount < RETRANSMISSION -1):
+                            print('packet#%d timeout, retransmit' % (i + 1))
+                        elif (ack == -1) and (transcount == RETRANSMISSION -1):
+                            print('packet#%d retransmit fail' % (i + 1))
+                            bin_file.close()
+                            serial_deinit()
+                            return
                     remain_data_len = remain_data_len - 128
                     remain_data_index = remain_data_index + 128
                 else:
@@ -214,13 +277,26 @@ def main():
                     crc = calc_crc16(packet[1:129])
                     packet[FIRST_PACKET_CRC0_INDEX] = (crc >> 0) & 0xff
                     packet[FIRST_PACKET_CRC1_INDEX] = (crc >> 8) & 0xff
-                    serial_write(bytes(packet))
-                    ack = serial_read(1, 3)
-                    if (ack != ACK):
-                        print('NACK2 from slave')
-                        bin_file.close()
-                        serial_deinit()
-                        return
+                    transcount = 0
+                    for transcount in range(RETRANSMISSION):
+                        serial_write(bytes(packet))
+                        ack = serial_read(1, 3)
+                        if (ack == ACK):
+                            break
+                        elif (ack == NAK) and (transcount < RETRANSMISSION -1):
+                            print('packet#%d crc error, retransmit' % (i + 1))
+                        elif (ack == NAK) and (transcount == RETRANSMISSION -1):
+                            print('packet#%d retransmit fail' % (i + 1))
+                            bin_file.close()
+                            serial_deinit()
+                            return
+                        elif (ack == -1) and (transcount < RETRANSMISSION -1):
+                            print('packet#%d timeout, retransmit' % (i + 1))
+                        elif (ack == -1) and (transcount == RETRANSMISSION -1):
+                            print('packet#%d retransmit fail' % (i + 1))
+                            bin_file.close()
+                            serial_deinit()
+                            return
 
             bin_file.close()
 

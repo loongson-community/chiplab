@@ -291,6 +291,8 @@ do
             RUN_FUNC=n 
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -298,6 +300,8 @@ do
             RUN_FUNC=n 
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -305,6 +309,8 @@ do
             RUN_FUNC=n 
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -312,6 +318,8 @@ do
             RUN_FUNC=n 
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -319,6 +327,8 @@ do
             RUN_FUNC=n 
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -396,6 +406,8 @@ do
             RUN_FUNC=n
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -403,6 +415,17 @@ do
             RUN_FUNC=n
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
+            mkdir -p ./obj/
+            mkdir -p ./log/
+            ;;
+        hello_world) 
+            RUN_FUNC=n
+            RUN_C=y
+            DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;
@@ -419,6 +442,8 @@ do
             RUN_FUNC=n
             RUN_C=y
             DEAD_CLOCK_EN=n
+            OUTPUT_PC_INFO=n
+            OUTPUT_UART_INFO=y
             mkdir -p ./obj/
             mkdir -p ./log/
             ;;

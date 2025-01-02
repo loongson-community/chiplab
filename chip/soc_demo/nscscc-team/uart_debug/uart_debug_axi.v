@@ -9,6 +9,7 @@ module uart_debug_axi(
     input           uart_debug_we,
     input    [31:0] uart_debug_addr,
     input    [31:0] uart_debug_wdata,
+    input           uart_debug_stb,
 
     //uart debug response 信号
     output reg         store_finish,
@@ -42,7 +43,7 @@ module uart_debug_axi(
     output   [ 1:0] awlock,
     output   [ 3:0] awcache,
     output   [ 2:0] awprot,
-    output reg         awvalid,
+    output reg      awvalid,
     input           awready,
     //Write data channel
     output   [ 3:0] wid,
@@ -63,6 +64,7 @@ module uart_debug_axi(
     reg    [31:0] uart_debug_wdata_r;
     wire urat_debug_wreq;
     wire urat_debug_rreq;
+    reg [3:0] uart_debug_wstrb;
 
     // 状态
     localparam S_IDLE       = 3'h0;
@@ -148,7 +150,7 @@ module uart_debug_axi(
     assign awcache      = 4'h0;
     assign awprot       = 3'h0;
     assign wid          = 4'h2;
-    assign wstrb        = 4'hf;
+    assign wstrb        = uart_debug_wstrb;
     assign bready       = 1'h1;    
 
     always @(*) begin
@@ -247,19 +249,49 @@ always @(posedge clk or negedge rst_n) begin
         if(~rst_n)begin
             uart_debug_addr_r <= 32'h0;
             uart_debug_wdata_r <= 32'h0;
+            uart_debug_wstrb <= 4'h0;
         end
         else begin
             if(urat_debug_wreq)begin
-                uart_debug_addr_r <= uart_debug_addr;
-                uart_debug_wdata_r <= uart_debug_wdata;
+                uart_debug_addr_r <= uart_debug_addr & 32'hffff_fffc;
+                if(uart_debug_stb) begin
+                    case (uart_debug_addr[1:0])
+                        2'h0 : begin
+                            uart_debug_wstrb <= 4'b0001;
+                            uart_debug_wdata_r <= uart_debug_wdata;
+                        end
+                        2'h1 : begin
+                            uart_debug_wstrb <= 4'b0010;
+                            uart_debug_wdata_r <= {16'h0,uart_debug_wdata[7:0],8'h0};
+                        end
+                        2'h2 : begin
+                            uart_debug_wstrb <= 4'b0100;
+                            uart_debug_wdata_r <= {8'h0,uart_debug_wdata[7:0],16'h0};
+                        end
+                        2'h3 : begin
+                            uart_debug_wstrb <= 4'b1000;
+                            uart_debug_wdata_r <= {uart_debug_wdata[7:0],24'h0};
+                        end
+                        default : begin
+                            uart_debug_wstrb <= 4'b0000;
+                            uart_debug_wdata_r <= 32'h0;
+                        end
+                    endcase
+                end
+                else begin
+                    uart_debug_wstrb <= 4'hf;
+                    uart_debug_wdata_r <= uart_debug_wdata;
+                end
             end
             else if(urat_debug_rreq)begin
-                uart_debug_addr_r <= uart_debug_addr;
+                uart_debug_addr_r <= uart_debug_addr & 32'hffff_fffc;
                 uart_debug_wdata_r <= 32'h0;
+                uart_debug_wstrb <= 4'h0;
             end
             else begin
                 uart_debug_addr_r <= uart_debug_addr_r;
                 uart_debug_wdata_r <= uart_debug_wdata_r;
+                uart_debug_wstrb <= uart_debug_wstrb;
             end
         end
     end

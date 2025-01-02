@@ -39,6 +39,7 @@ public:
     
     int read_valid;
     vluint64_t read_addr ;
+    vluint64_t write_addr ;
 
     inline int find(vluint64_t ptr){
         vluint64_t idx = (ptr>>pgwd)&(tbsz-1);

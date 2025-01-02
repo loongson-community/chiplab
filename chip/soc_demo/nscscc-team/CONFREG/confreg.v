@@ -76,7 +76,8 @@ module confreg
 (                     
     input  wire        aclk,          
     input  wire        timer_clk,
-    input  wire        aresetn,     
+    input  wire        aresetn,
+    input  wire        sys_resetn,     
     // read and write from cpu
     //ar
     input  wire [3 :0] arid   ,
@@ -457,15 +458,15 @@ reg        no_mask;     //if led_r_n[7:0] is all 1, no mask
 reg        short_delay; //memory short delay
 always @ (posedge aclk)
 begin
-   if (!aresetn)
+   if (!sys_resetn)
        pseudo_random_23 <= simu_flag[0] ? `RANDOM_SEED : {7'b1010101,led_r_n};
    else
        pseudo_random_23 <= {pseudo_random_23[21:0],pseudo_random_23[22] ^ pseudo_random_23[17]};
 
-   if(!aresetn)
+   if(!sys_resetn)
        no_mask <= pseudo_random_23[15:0]==16'h00FF;
 
-   if(!aresetn)
+   if(!sys_resetn)
        short_delay <= pseudo_random_23[7:0]==8'hFF;
 end
 assign ram_random_mask[0] = (pseudo_random_23[10]&pseudo_random_23[20]) & (short_delay|(pseudo_random_23[11]^pseudo_random_23[5]))
